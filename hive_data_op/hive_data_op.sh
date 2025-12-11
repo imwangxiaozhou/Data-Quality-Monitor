@@ -68,7 +68,7 @@ HQL_CREATE="CREATE TABLE IF NOT EXISTS ${TARGET_TABLE} (
     ${COLUMNS_DEF}
 )
 PARTITIONED BY (ds string)
-STORED AS PARQUET;"
+comment '' stored as orc tblproperties('orc.compression'='snappy');"
 
 echo "SQL: $HQL_CREATE"
 hive -e "$HQL_CREATE"
