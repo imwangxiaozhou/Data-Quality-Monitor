@@ -62,10 +62,7 @@ if [ -z "$COLUMNS_DEF" ]; then
     exit 1
 fi
 
-echo "2. Dropping target table ${TARGET_TABLE} if exists..."
-hive -e "DROP TABLE IF EXISTS ${TARGET_TABLE};"
-
-echo "3. Creating target table ${TARGET_TABLE}..."
+echo "2. Creating target table ${TARGET_TABLE}..."
 
 HQL_CREATE="CREATE TABLE IF NOT EXISTS ${TARGET_TABLE} (
     ${COLUMNS_DEF}
@@ -81,14 +78,10 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "4. Inserting data into ${TARGET_TABLE} partition (ds='${DS_VALUE}')..."
+echo "3. Inserting data into ${TARGET_TABLE} partition (ds='${DS_VALUE}')..."
 
-HQL_INSERT="SET hive.mapred.mode=nonstrict;
-SET hive.exec.dynamic.partition=true;
+HQL_INSERT="
 SET hive.exec.dynamic.partition.mode=nonstrict;
-SET hive.vectorized.execution.enabled=false;
-SET hive.vectorized.execution.reduce.enabled=false;
-SET hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat;
 INSERT INTO TABLE ${TARGET_TABLE} PARTITION (ds='${DS_VALUE}')
 SELECT ${SELECT_COLS} FROM ${SOURCE_TABLE};"
 
