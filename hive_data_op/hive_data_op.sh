@@ -83,6 +83,9 @@ echo "3. Inserting data into ${TARGET_TABLE} partition (ds='${DS_VALUE}')..."
 HQL_INSERT="SET hive.mapred.mode=nonstrict;
 SET hive.exec.dynamic.partition=true;
 SET hive.exec.dynamic.partition.mode=nonstrict;
+SET hive.vectorized.execution.enabled=false;
+SET hive.vectorized.execution.reduce.enabled=false;
+SET hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat;
 INSERT INTO TABLE ${TARGET_TABLE} PARTITION (ds='${DS_VALUE}')
 SELECT ${SELECT_COLS} FROM ${SOURCE_TABLE};"
 
