@@ -1,16 +1,43 @@
 #!/bin/bash
 
 # 检查参数
-if [ $# -lt 3 ]; then
-    echo "Usage: $0 <source_table> <target_table> <ds_value>"
+if [ $# -lt 2 ]; then
+    echo "Usage: $0 <table_name> <ds_value>"
     exit 1
 fi
 
-SOURCE_TABLE=$1
-TARGET_TABLE=$2
-DS_VALUE=$3
+TABLE_NAME=$1
+DS_VALUE=$2
+BACKUP_TABLE="${TABLE_NAME}_bak"
 
-echo "1. Getting schema from ${SOURCE_TABLE}..."
+echo "1. Preparing workspace..."
+echo "Target Table: ${TABLE_NAME}"
+echo "Backup Table: ${BACKUP_TABLE}"
+
+# 1.1 如果备份表已存在，先删除
+echo "Dropping old backup table if exists..."
+hive -e "DROP TABLE IF EXISTS ${BACKUP_TABLE};"
+
+# 1.2 检查原表是否存在
+hive -S -e "DESCRIBE ${TABLE_NAME}" > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo "Error: Table ${TABLE_NAME} does not exist."
+    exit 1
+fi
+
+# 1.3 重命名原表为备份表
+echo "Renaming ${TABLE_NAME} to ${BACKUP_TABLE}..."
+hive -e "ALTER TABLE ${TABLE_NAME} RENAME TO ${BACKUP_TABLE};"
+
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to rename table."
+    exit 1
+fi
+
+SOURCE_TABLE=$BACKUP_TABLE
+TARGET_TABLE=$TABLE_NAME
+
+echo "2. Getting schema from ${SOURCE_TABLE}..."
 
 # 获取表结构，过滤掉表头、WARN日志、空行、分区信息行(#开头)
 # 使用 -S (silent) 模式减少非查询输出
@@ -18,6 +45,8 @@ RAW_SCHEMA=$(hive -S -e "DESCRIBE ${SOURCE_TABLE}")
 
 if [ $? -ne 0 ]; then
     echo "Error: Failed to describe source table."
+    # 尝试恢复原表名
+    hive -e "ALTER TABLE ${BACKUP_TABLE} RENAME TO ${TABLE_NAME};"
     exit 1
 fi
 
@@ -59,26 +88,34 @@ unset IFS
 
 if [ -z "$COLUMNS_DEF" ]; then
     echo "Error: No columns found in source table or parsing failed."
+    # 尝试恢复
+    hive -e "ALTER TABLE ${BACKUP_TABLE} RENAME TO ${TABLE_NAME};"
     exit 1
 fi
 
-echo "2. Creating target table ${TARGET_TABLE}..."
+echo "3. Creating target table ${TARGET_TABLE}..."
 
+# 使用 ORC 存储和 Snappy 压缩
 HQL_CREATE="CREATE TABLE IF NOT EXISTS ${TARGET_TABLE} (
     ${COLUMNS_DEF}
 )
-PARTITIONED BY (ds string) stored as orc tblproperties('orc.compression'='snappy');"
+PARTITIONED BY (ds string) 
+STORED AS ORC 
+TBLPROPERTIES('orc.compression'='snappy');"
 
 echo "SQL: $HQL_CREATE"
 hive -e "$HQL_CREATE"
 
 if [ $? -ne 0 ]; then
     echo "Error: Failed to create target table."
+    # 恢复 (需要先删除可能创建失败的表)
+    hive -e "DROP TABLE IF EXISTS ${TABLE_NAME}; ALTER TABLE ${BACKUP_TABLE} RENAME TO ${TABLE_NAME};"
     exit 1
 fi
 
-echo "3. Inserting data into ${TARGET_TABLE} partition (ds='${DS_VALUE}')..."
+echo "4. Inserting data into ${TARGET_TABLE} partition (ds='${DS_VALUE}')..."
 
+# 保持动态分区设置
 HQL_INSERT="
 SET hive.exec.dynamic.partition.mode=nonstrict;
 INSERT INTO TABLE ${TARGET_TABLE} PARTITION (ds='${DS_VALUE}')
@@ -89,7 +126,8 @@ hive -e "$HQL_INSERT"
 
 if [ $? -ne 0 ]; then
     echo "Error: Failed to insert data."
+    echo "Check backup table: ${BACKUP_TABLE}"
     exit 1
 fi
 
-echo "Done."
+echo "Done. Backup table ${BACKUP_TABLE} is kept for safety."
