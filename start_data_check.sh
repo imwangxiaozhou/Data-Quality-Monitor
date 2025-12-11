@@ -8,6 +8,10 @@ cd "$BASE_DIR"
 LOG_DIR="$BASE_DIR/../../log/monitor_task"
 #还要创建一个文件夹
 mkdir -p "$LOG_DIR"
+
+# 清理 30 天前的日志
+find "$LOG_DIR" -type f -name "monitor_*.log" -mtime +30 -exec rm {} \; 2>/dev/null
+
 LOG_FILE="$LOG_DIR/monitor_$(date +%Y%m%d).log"
 
 # 所有的输出都追加到日志文件
@@ -40,3 +44,6 @@ LOG_FILE="$LOG_DIR/monitor_$(date +%Y%m%d).log"
     fi
     echo "" # 空行分隔
 } >> "$LOG_FILE" 2>&1
+
+#写个调用示例
+# ./start_data_check.sh

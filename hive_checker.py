@@ -104,6 +104,47 @@ class HiveChecker:
         finally:
             cursor.close()
 
+    def get_max_date_value(self, table_name):
+        """
+        获取表的最大日期值 (优先查 ds，没有则查 createtime)
+        :param table_name: 表名
+        :return: 最大日期值 (字符串) 或 None
+        """
+        if not self.conn:
+            self.connect()
+        
+        cursor = self.conn.cursor()
+        target_col = None
+        
+        try:
+            # 1. 获取表结构以确定字段
+            # 注意: DESCRIBE 输出通常包含 col_name, data_type, comment
+            sql_desc = f"DESCRIBE {table_name}"
+            # print(f"[{table_name}] 检查表结构: {sql_desc}")
+            cursor.execute(sql_desc)
+            columns = [row[0].strip() for row in cursor.fetchall()]
+            
+            if 'ds' in columns:
+                target_col = 'ds'
+            elif 'createtime' in columns:
+                target_col = 'createtime'
+            else:
+                print(f"[{table_name}] 未找到 ds 或 createtime 字段")
+                return None
+                
+            # 2. 查询最大值
+            sql = f"SELECT max({target_col}) FROM {table_name}"
+            print(f"[{table_name}] 查询最大时间 ({target_col}): {sql}")
+            cursor.execute(sql)
+            result = cursor.fetchone()
+            return result[0] if result else None
+            
+        except Exception as e:
+            print(f"[{table_name}] 获取最大日期失败: {e}")
+            return None
+        finally:
+            cursor.close()
+
     def check_status_distribution(self, table_name, ds):
         """
         检查指定分区的 status 字段分布情况
