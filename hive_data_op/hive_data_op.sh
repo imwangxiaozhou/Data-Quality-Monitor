@@ -67,8 +67,7 @@ echo "2. Creating target table ${TARGET_TABLE}..."
 HQL_CREATE="CREATE TABLE IF NOT EXISTS ${TARGET_TABLE} (
     ${COLUMNS_DEF}
 )
-PARTITIONED BY (ds string)
-comment '' stored as orc tblproperties('orc.compression'='snappy');"
+PARTITIONED BY (ds string) stored as orc tblproperties('orc.compression'='snappy');"
 
 echo "SQL: $HQL_CREATE"
 hive -e "$HQL_CREATE"
